@@ -1,0 +1,212 @@
+import pandas as pd
+import numpy as np
+ 
+import matplotlib.pyplot as plt
+ 
+from sklearn.model_selection import GroupShuffleSplit
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score, mean_squared_error
+df.isna().sum()
+import numpy as np
+y = np.log1p(df['Conc'])
+X = df[['BP', 'Log K', 'Base']]
+X = pd.get_dummies(X, columns=['Base'], drop_first=True)
+from sklearn.model_selection import GroupShuffleSplit
+ 
+groups = df['Replicate']
+ 
+gss = GroupShuffleSplit(test_size=0.2, random_state=42)
+train_idx, test_idx = next(gss.split(X, y, groups))
+ 
+X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_squared_error
+ 
+lin_reg = LinearRegression()
+lin_reg.fit(X_train, y_train)
+ 
+y_pred = lin_reg.predict(X_test)
+ 
+print("R²:", r2_score(y_test, y_pred))
+print("RMSE:", np.sqrt(mean_squared_error(y_test, y_pred)))
+from sklearn.ensemble import RandomForestRegressor
+ 
+rf = RandomForestRegressor(
+    n_estimators=300,
+    random_state=42
+)
+ 
+rf.fit(X_train, y_train)
+y_pred_rf = rf.predict(X_test)
+ 
+print("R² (RF):", r2_score(y_test, y_pred_rf))
+ 
+import matplotlib.pyplot as plt
+ 
+feature_names = X.columns
+importances = rf.feature_importances_
+ 
+plt.barh(feature_names, importances)
+plt.xlabel("Importance")
+plt.title("Feature importance for flavour concentration prediction")
+plt.show()
+df['predicted_log_conc'] = rf.predict(X)
+df['predicted_conc'] = np.expm1(df['predicted_log_conc'])
+base_summary = df.groupby('Base')['predicted_conc'].sum()
+import matplotlib.pyplot as plt
+ 
+plt.figure(figsize=(6, 6))
+ 
+for base in df['Base'].unique():
+    subset = df[df['Base'] == base]
+    plt.scatter(
+        subset['Log K'],
+        subset['predicted_conc'],
+        label=base,
+        alpha=0.7
+    )
+ 
+# Axis labels
+plt.xlabel("Log K$_{ow}$", fontsize=20)
+plt.ylabel("Predicted flavour concentration", fontsize=20)
+ 
+# Title
+plt.title(
+    "Effect of compound partitioning (Log K$_{ow}$) on flavour release by base",
+    fontsize=20
+)
+ 
+# Tick labels (numbers on axes)
+plt.xticks(fontsize=18)
+plt.yticks(fontsize=18)
+ 
+# Legend
+plt.legend(title="Base", fontsize=20, title_fontsize=20)
+ 
+plt.tight_layout()
+plt.show()
+ 
+import matplotlib.pyplot as plt
+ 
+plt.figure(figsize=(6, 6))
+ 
+for base in df['Base'].unique():
+    subset = df[df['Base'] == base]
+    plt.scatter(
+        subset['BP'],
+        subset['predicted_conc'],
+        label=base,
+        alpha=0.7
+    )
+ 
+# Axis labels
+plt.xlabel("Boiling point (BP)", fontsize=20)
+plt.ylabel("Predicted flavour concentration", fontsize=20)
+ 
+# Title
+plt.title(
+    "Effect of compound volatility (BP) on flavour release by base",
+    fontsize=20
+)
+ 
+# Tick labels (numbers on axes)
+plt.xticks(fontsize=18)
+plt.yticks(fontsize=18)
+ 
+# Legend
+plt.legend(title="Base", fontsize=20, title_fontsize=20)
+ 
+plt.tight_layout()
+plt.show()
+import pandas as pd
+ 
+bp_bins = [0, 100, 180, df['BP'].max() + 1]
+bp_labels = ['<100 C', '100–180 C', '>180 C']
+ 
+df['BP_bin'] = pd.cut(df['BP'], bins=bp_bins, labels=bp_labels)
+bp_summary = (
+    df
+    .groupby(['BP_bin', 'Base'])['predicted_conc']
+    .mean()
+    .reset_index()
+)
+bp_pivot = bp_summary.pivot(
+    index='BP_bin',
+    columns='Base',
+    values='predicted_conc'
+)
+ 
+bp_pivot
+import matplotlib.pyplot as plt
+ 
+bp_pivot.plot(kind='bar', figsize=(6, 6))
+ 
+# Axis label
+plt.ylabel("Mean predicted flavour concentration", fontsize=18)
+plt.xlabel("Boiling point bins", fontsize=18)
+ 
+# Title
+plt.title(
+    "Base-dependent flavour release across boiling point regimes",
+    fontsize=20
+)
+ 
+# Tick labels (x and y)
+plt.xticks(fontsize=18, rotation=0)
+plt.yticks(fontsize=18)
+ 
+# Legend
+plt.legend(title="Base", fontsize=20, title_fontsize=20)
+ 
+plt.tight_layout()
+plt.show()
+from scipy.stats import kruskal
+ 
+groups = [
+    df[df['Base'] == base]['predicted_conc']
+    for base in df['Base'].unique()
+]
+ 
+stat, p = kruskal(*groups)
+print("Kruskal–Wallis p-value:", p)
+import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
+ 
+# Predict on test set
+y_pred_rf = rf.predict(X_test)
+ 
+# Compute R² (for annotation)
+r2 = r2_score(y_test, y_pred_rf)
+ 
+plt.figure(figsize=(6, 6))
+plt.scatter(y_test, y_pred_rf, alpha=0.7)
+ 
+# Diagonal reference line
+lims = [
+    min(y_test.min(), y_pred_rf.min()),
+    max(y_test.max(), y_pred_rf.max())
+]
+plt.plot(lims, lims)
+plt.xlim(lims)
+plt.ylim(lims)
+ 
+# Axis labels
+plt.xlabel("Observed log(Conc + 1)", fontsize=20)
+plt.ylabel("Predicted log(Conc + 1)", fontsize=20)
+ 
+# Title
+plt.title(
+    f"Random Forest regression performance (R² = {r2:.2f})",
+    fontsize=20
+)
+ 
+# Tick labels (numbers on axes)
+plt.xticks(fontsize=20)
+plt.yticks(fontsize=20)
+ 
+plt.tight_layout()
+plt.show()
