@@ -1,66 +1,146 @@
+# ================================
+# LIBRARIES
+# ================================
+
+# Data handling (tables like Excel but smarter)
 import pandas as pd
+
+# Numerical math (arrays, logs, square roots, etc.)
 import numpy as np
- 
+
+# Plotting
 import matplotlib.pyplot as plt
- 
-from sklearn.model_selection import GroupShuffleSplit
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import r2_score, mean_squared_error
+
+# Machine learning utilities
+from sklearn.model_selection import GroupShuffleSplit   # group-aware train/test split
+from sklearn.preprocessing import StandardScaler        # feature scaling (not used later)
+from sklearn.impute import SimpleImputer                # missing value filling (not used later)
+from sklearn.linear_model import LinearRegression       # linear regression model
+from sklearn.ensemble import RandomForestRegressor      # random forest model
+from sklearn.metrics import r2_score, mean_squared_error # evaluation metrics
+
+
+# ================================
+# QUICK DATA CHECK
+# ================================
+
+# Count missing values in each column
+# Helps decide if imputation is needed
 df.isna().sum()
-import numpy as np
+
+
+# ================================
+# TARGET + FEATURES
+# ================================
+
+# Log-transform concentration to:
+# 1. stabilize variance
+# 2. reduce skewness
+# 3. make regression easier
+# log1p = log(1 + x) so zero values are allowed
 y = np.log1p(df['Conc'])
+
+# Select predictor variables
+# BP = boiling point
+# Log K = partition coefficient
+# Base = formulation base type
 X = df[['BP', 'Log K', 'Base']]
+
+
+# Convert categorical "Base" into dummy variables (one-hot encoding)
+# drop_first avoids multicollinearity
 X = pd.get_dummies(X, columns=['Base'], drop_first=True)
-from sklearn.model_selection import GroupShuffleSplit
- 
+
+
+# ================================
+# GROUPED TRAIN/TEST SPLIT
+# ================================
+
+# Replicates should not leak into both train and test
 groups = df['Replicate']
- 
+
+# 80% train, 20% test
 gss = GroupShuffleSplit(test_size=0.2, random_state=42)
+
+# Generate indices for split
 train_idx, test_idx = next(gss.split(X, y, groups))
- 
+
+# Create train/test sets
 X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
 y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_squared_error
- 
+
+
+# ================================
+# LINEAR REGRESSION MODEL
+# ================================
+
+# Create model
 lin_reg = LinearRegression()
+
+# Train model
 lin_reg.fit(X_train, y_train)
- 
+
+# Predict test set
 y_pred = lin_reg.predict(X_test)
- 
+
+# Evaluate performance
 print("R²:", r2_score(y_test, y_pred))
 print("RMSE:", np.sqrt(mean_squared_error(y_test, y_pred)))
-from sklearn.ensemble import RandomForestRegressor
- 
+
+
+# ================================
+# RANDOM FOREST MODEL
+# ================================
+
+# Create ensemble model (nonlinear relationships allowed)
 rf = RandomForestRegressor(
-    n_estimators=300,
+    n_estimators=300,   # number of trees
     random_state=42
 )
- 
+
+# Train
 rf.fit(X_train, y_train)
+
+# Predict
 y_pred_rf = rf.predict(X_test)
- 
+
+# Evaluate
 print("R² (RF):", r2_score(y_test, y_pred_rf))
- 
-import matplotlib.pyplot as plt
- 
+
+
+# ================================
+# FEATURE IMPORTANCE
+# ================================
+
+# Get feature names and importance scores
 feature_names = X.columns
 importances = rf.feature_importances_
- 
+
+# Horizontal bar plot
 plt.barh(feature_names, importances)
 plt.xlabel("Importance")
 plt.title("Feature importance for flavour concentration prediction")
 plt.show()
+
+
+# ================================
+# PREDICTIONS FOR ALL DATA
+# ================================
+
+# Predict log concentration
 df['predicted_log_conc'] = rf.predict(X)
+
+# Convert back to real concentration
+# expm1 reverses log1p
 df['predicted_conc'] = np.expm1(df['predicted_log_conc'])
-base_summary = df.groupby('Base')['predicted_conc'].sum()
-import matplotlib.pyplot as plt
- 
+
+
+# ================================
+# PLOT: LogK vs predicted concentration by base
+# ================================
+
 plt.figure(figsize=(6, 6))
- 
+
 for base in df['Base'].unique():
     subset = df[df['Base'] == base]
     plt.scatter(
@@ -69,31 +149,21 @@ for base in df['Base'].unique():
         label=base,
         alpha=0.7
     )
- 
-# Axis labels
+
 plt.xlabel("Log K$_{ow}$", fontsize=20)
 plt.ylabel("Predicted flavour concentration", fontsize=20)
- 
-# Title
-plt.title(
-    "Effect of compound partitioning (Log K$_{ow}$) on flavour release by base",
-    fontsize=20
-)
- 
-# Tick labels (numbers on axes)
-plt.xticks(fontsize=18)
-plt.yticks(fontsize=18)
- 
-# Legend
-plt.legend(title="Base", fontsize=20, title_fontsize=20)
- 
+plt.title("Effect of compound partitioning (Log K$_{ow}$) on flavour release by base", fontsize=20)
+plt.legend(title="Base", fontsize=20)
 plt.tight_layout()
 plt.show()
- 
-import matplotlib.pyplot as plt
- 
+
+
+# ================================
+# PLOT: Boiling point vs predicted concentration
+# ================================
+
 plt.figure(figsize=(6, 6))
- 
+
 for base in df['Base'].unique():
     subset = df[df['Base'] == base]
     plt.scatter(
@@ -102,111 +172,97 @@ for base in df['Base'].unique():
         label=base,
         alpha=0.7
     )
- 
-# Axis labels
+
 plt.xlabel("Boiling point (BP)", fontsize=20)
 plt.ylabel("Predicted flavour concentration", fontsize=20)
- 
-# Title
-plt.title(
-    "Effect of compound volatility (BP) on flavour release by base",
-    fontsize=20
-)
- 
-# Tick labels (numbers on axes)
-plt.xticks(fontsize=18)
-plt.yticks(fontsize=18)
- 
-# Legend
-plt.legend(title="Base", fontsize=20, title_fontsize=20)
- 
+plt.title("Effect of compound volatility (BP) on flavour release by base", fontsize=20)
+plt.legend(title="Base", fontsize=20)
 plt.tight_layout()
 plt.show()
-import pandas as pd
- 
+
+
+# ================================
+# BINNING BOILING POINTS
+# ================================
+
+# Create boiling point ranges
 bp_bins = [0, 100, 180, df['BP'].max() + 1]
 bp_labels = ['<100 C', '100–180 C', '>180 C']
- 
+
+# Assign each compound to bin
 df['BP_bin'] = pd.cut(df['BP'], bins=bp_bins, labels=bp_labels)
+
+# Compute mean predicted concentration per base per bin
 bp_summary = (
     df
     .groupby(['BP_bin', 'Base'])['predicted_conc']
     .mean()
     .reset_index()
 )
+
+# Convert to pivot table for plotting
 bp_pivot = bp_summary.pivot(
     index='BP_bin',
     columns='Base',
     values='predicted_conc'
 )
- 
+
 bp_pivot
-import matplotlib.pyplot as plt
- 
+
+
+# ================================
+# BAR PLOT OF BIN RESULTS
+# ================================
+
 bp_pivot.plot(kind='bar', figsize=(6, 6))
- 
-# Axis label
+
 plt.ylabel("Mean predicted flavour concentration", fontsize=18)
 plt.xlabel("Boiling point bins", fontsize=18)
- 
-# Title
-plt.title(
-    "Base-dependent flavour release across boiling point regimes",
-    fontsize=20
-)
- 
-# Tick labels (x and y)
-plt.xticks(fontsize=18, rotation=0)
-plt.yticks(fontsize=18)
- 
-# Legend
-plt.legend(title="Base", fontsize=20, title_fontsize=20)
- 
+plt.title("Base-dependent flavour release across boiling point regimes", fontsize=20)
+plt.legend(title="Base", fontsize=20)
 plt.tight_layout()
 plt.show()
+
+
+# ================================
+# STATISTICAL TEST (non-parametric)
+# ================================
+
 from scipy.stats import kruskal
- 
+
+# Compare predicted concentrations between bases
 groups = [
     df[df['Base'] == base]['predicted_conc']
     for base in df['Base'].unique()
 ]
- 
+
 stat, p = kruskal(*groups)
+
 print("Kruskal–Wallis p-value:", p)
-import matplotlib.pyplot as plt
-from sklearn.metrics import r2_score
- 
-# Predict on test set
-y_pred_rf = rf.predict(X_test)
- 
-# Compute R² (for annotation)
+
+
+# ================================
+# PREDICTED vs OBSERVED PLOT
+# ================================
+
 r2 = r2_score(y_test, y_pred_rf)
- 
+
 plt.figure(figsize=(6, 6))
 plt.scatter(y_test, y_pred_rf, alpha=0.7)
- 
-# Diagonal reference line
+
+# Perfect prediction reference line
 lims = [
     min(y_test.min(), y_pred_rf.min()),
     max(y_test.max(), y_pred_rf.max())
 ]
+
 plt.plot(lims, lims)
 plt.xlim(lims)
 plt.ylim(lims)
- 
-# Axis labels
+
 plt.xlabel("Observed log(Conc + 1)", fontsize=20)
 plt.ylabel("Predicted log(Conc + 1)", fontsize=20)
- 
-# Title
-plt.title(
-    f"Random Forest regression performance (R² = {r2:.2f})",
-    fontsize=20
-)
- 
-# Tick labels (numbers on axes)
-plt.xticks(fontsize=20)
-plt.yticks(fontsize=20)
- 
+plt.title(f"Random Forest regression performance (R² = {r2:.2f})", fontsize=20)
+
 plt.tight_layout()
 plt.show()
